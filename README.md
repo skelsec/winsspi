@@ -1,2 +1,2 @@
 # winsspi
-Windows SSPI wrapper in prue python
+Windows SSPI wrapper in pure python
