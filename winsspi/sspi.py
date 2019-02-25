@@ -144,8 +144,8 @@ class KerberoastSSPI(SSPI):
 class LDAP3NTLMSSPI(SSPI):
 	def __init__(self, user_name = None, domain = None, password = None):
 		SSPI.__init__(self, SSPIModule.NTLM)
-		self.client_name = 'victim@test.corp'
-		self.target_name = 'WIN2019AD@test.corp'
+		self.client_name = user_name
+		self.target_name = domain
 		
 		self.authenticate_data = None
 		self.flags = ISC_REQ.USE_DCE_STYLE | ISC_REQ.DELEGATE | ISC_REQ.MUTUAL_AUTH |ISC_REQ.REPLAY_DETECT |ISC_REQ.SEQUENCE_DETECT |ISC_REQ.CONFIDENTIALITY |ISC_REQ.CONNECTION
