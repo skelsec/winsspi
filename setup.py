@@ -28,6 +28,10 @@ setup(
 
 	# long_description=open("README.txt").read(),
 	python_requires='>=3.6',
+	install_requires=[
+		'minikerberos',
+	],
+	
 	classifiers=(
 		"Programming Language :: Python :: 3.6",
 		"License :: OSI Approved :: MIT License",

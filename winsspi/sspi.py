@@ -144,19 +144,22 @@ class KerberoastSSPI(SSPI):
 class LDAP3NTLMSSPI(SSPI):
 	def __init__(self, user_name = None, domain = None, password = None):
 		SSPI.__init__(self, SSPIModule.NTLM)
-		self.client_name = user_name
-		self.target_name = domain
+		self.client_name = None
+		self.target_name = None
 		
 		self.authenticate_data = None
 		self.flags = ISC_REQ.USE_DCE_STYLE | ISC_REQ.DELEGATE | ISC_REQ.MUTUAL_AUTH |ISC_REQ.REPLAY_DETECT |ISC_REQ.SEQUENCE_DETECT |ISC_REQ.CONFIDENTIALITY |ISC_REQ.CONNECTION
 		
 	def create_negotiate_message(self):
+		print('MONKEY - create_negotiate_message')
 		self._get_credentials(self.client_name, self.target_name, flags = SECPKG_CRED.OUTBOUND)
 		res, data = self._init_ctx(self.target_name, None, flags = self.flags )
 		return data
 		
 	def create_authenticate_message(self):
+		print('MONKEY - create_authenticate_message')
 		return self.authenticate_data
 		
 	def parse_challenge_message(self, autorize_data):
+		print('MONKEY - parse_challenge_message')
 		res, self.authenticate_data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
