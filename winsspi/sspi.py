@@ -26,16 +26,15 @@ class SSPI:
 		self.cred_struct = AcquireCredentialsHandle(client_name, self.package_name.value, target_name, flags)
 		
 	def _init_ctx(self, target, token_data = None, flags = ISC_REQ.INTEGRITY | ISC_REQ.CONFIDENTIALITY | ISC_REQ.SEQUENCE_DETECT | ISC_REQ.REPLAY_DETECT):
-		res, self.context, newbuf, outputflags, expiry = InitializeSecurityContext(self.cred_struct, target, token = token_data, ctx = self.context, flags = flags)
-		print( ISC_REQ(outputflags.value))
+		res, self.context, data, outputflags, expiry = InitializeSecurityContext(self.cred_struct, target, token = token_data, ctx = self.context, flags = flags)
 		if res == SEC_E.OK:
-			return SSPIResult.OK, newbuf[0].Buffer
+			return SSPIResult.OK, data
 		else:
-			return SSPIResult.CONTINUE, newbuf[0].Buffer
+			return SSPIResult.CONTINUE, data
 			
 	def _unwrap(self, data, message_no = 0):
 		data_buff = DecryptMessage(self.context, data, message_no)
-		return data_buff[0].Buffer
+		return data_buff
 	
 	def authGSSClientInit(self, client_name, target_name):
 		raise Exception('Not implemented!')
@@ -97,7 +96,7 @@ class NegotiateSSPI(SSPI):
 		
 	def authGSSClientStep(self, token_data = None):
 		res, data = self._init_ctx(self.target_name, token_data)
-		self.response_data.put(data)
+		self.response_data.put(data[0][1])
 		return res
 		
 	def authGSSClientResponse(self):
@@ -137,7 +136,7 @@ class KerberoastSSPI(SSPI):
 		self.target_name = target_name
 		self._get_credentials(None, target_name)
 		res, data = self._init_ctx(self.target_name, None)
-		token = InitialContextToken.load(data)
+		token = InitialContextToken.load(data[0][1])
 		return token.native['innerContextToken'] #this is the AP_REQ
 		
 
@@ -148,18 +147,18 @@ class LDAP3NTLMSSPI(SSPI):
 		self.target_name = None
 		
 		self.authenticate_data = None
-		self.flags = ISC_REQ.USE_DCE_STYLE | ISC_REQ.DELEGATE | ISC_REQ.MUTUAL_AUTH |ISC_REQ.REPLAY_DETECT |ISC_REQ.SEQUENCE_DETECT |ISC_REQ.CONFIDENTIALITY |ISC_REQ.CONNECTION
+		#self.flags = ISC_REQ.USE_DCE_STYLE | ISC_REQ.DELEGATE | ISC_REQ.MUTUAL_AUTH |ISC_REQ.REPLAY_DETECT |ISC_REQ.SEQUENCE_DETECT |ISC_REQ.CONFIDENTIALITY |ISC_REQ.CONNECTION
+		self.flags = ISC_REQ.CONNECTION
 		
 	def create_negotiate_message(self):
-		print('MONKEY - create_negotiate_message')
 		self._get_credentials(self.client_name, self.target_name, flags = SECPKG_CRED.OUTBOUND)
 		res, data = self._init_ctx(self.target_name, None, flags = self.flags )
-		return data
+		return data[0][1]
 		
 	def create_authenticate_message(self):
-		print('MONKEY - create_authenticate_message')
 		return self.authenticate_data
 		
+		
 	def parse_challenge_message(self, autorize_data):
-		print('MONKEY - parse_challenge_message')
-		res, self.authenticate_data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
+		res, data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
+		self.authenticate_data = data[0][1]

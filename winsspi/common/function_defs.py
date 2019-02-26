@@ -4,7 +4,7 @@ import datetime
 import ctypes
 
 # call API to get max token size, or..
-maxtoken = 2880 # bytes
+maxtoken_size = 2880 # bytes
 
 _FILETIME_null_date = datetime.datetime(1601, 1, 1, 0, 0, 0)
 def FiletimeToDateTime(ft):
@@ -90,12 +90,12 @@ class SecBuffer(Structure):
 	InitializeSecurityContext will write to the buffer that is flagged "token"
 	and update the size, or else fail 0x80090321=SEC_E_BUFFER_TOO_SMALL."""	
 	_fields_ = [('cbBuffer',ULONG),('BufferType',ULONG),('pvBuffer',PVOID)]
-	def __init__(self, token=maxtoken, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN):
-		buf = ctypes.create_string_buffer(token) 
+	def __init__(self, token=b'\x00'*maxtoken_size, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN):
+		buf = ctypes.create_string_buffer(token, size=len(token)) 
 		Structure.__init__(self,sizeof(buf),buffer_type.value,ctypes.cast(byref(buf),PVOID))
 	@property
 	def Buffer(self):
-		return ctypes.string_at(self.pvBuffer, size=self.cbBuffer)	 
+		return (SECBUFFER_TYPE(self.BufferType), ctypes.string_at(self.pvBuffer, size=self.cbBuffer))	 
 	
 class SecBufferDesc(Structure):
 	"""Descriptor stores SECBUFFER_VERSION=0, number of buffers (e.g. one),
@@ -105,6 +105,13 @@ class SecBufferDesc(Structure):
 		Structure.__init__(self,0,1,byref(SecBuffer(*args, **kwargs)))
 	def __getitem__(self, index):
 		return self.pBuffers[index]
+	@property
+	def Buffers(self):
+		data = []
+		for i in range(self.cBuffers):
+			data.append(self.pBuffers[i].Buffer)
+		return data
+		
 PSecBufferDesc = POINTER(SecBufferDesc)
 
 PSecHandle = POINTER(SecHandle)
@@ -177,6 +184,20 @@ class ISC_REQ(enum.IntFlag):
 class DecryptFlags(enum.Enum):										
 	SIGN_ONLY = 0
 	SECQOP_WRAP_NO_ENCRYPT = 2147483649 # same as KERB_WRAP_NO_ENCRYPT
+	
+def FreeContextBuffer(secbuff):
+	def errc(result, func, arguments):
+		if SEC_E(result) == SEC_E.OK:
+			return SEC_E(result)
+		raise Exception('%s failed with error code %s (%s)' % ('DecryptMessage', result, SEC_E(result)))
+	
+	_FreeContextBuffer = windll.Secur32.FreeContextBuffer
+	_FreeContextBuffer.argtypes = [PVOID]
+	_FreeContextBuffer.restype  = DWORD
+	_FreeContextBuffer.errcheck  = errc
+	
+	res = _FreeContextBuffer(byref(secbuff))
+	return
 
 #https://github.com/mhammond/pywin32/blob/d64fac8d7bda2cb1d81e2c9366daf99e802e327f/win32/Lib/sspi.py#L108
 #https://docs.microsoft.com/en-us/windows/desktop/secauthn/using-sspi-with-a-windows-sockets-client
@@ -206,11 +227,11 @@ def AcquireCredentialsHandle(client_name, package_name, tragetspn, cred_usage, p
 	
 # https://msdn.microsoft.com/en-us/library/windows/desktop/aa375507(v=vs.85).aspx
 def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRITY | ISC_REQ.CONFIDENTIALITY | ISC_REQ.SEQUENCE_DETECT | ISC_REQ.REPLAY_DETECT, TargetDataRep  = 0, token = None):
-	print('==== InitializeSecurityContext ====')
-	print('Creds: %s' % creds)
-	print('Target: %s' % target)
-	print('ctx: %s' % ctx)
-	print('token: %s' % token)
+	#print('==== InitializeSecurityContext ====')
+	#print('Creds: %s' % creds)
+	#print('Target: %s' % target)
+	#print('ctx: %s' % ctx)
+	#print('token: %s' % token)
 	def errc(result, func, arguments):
 		if SEC_E(result) in [SEC_E.OK, SEC_E.COMPLETE_AND_CONTINUE, SEC_E.COMPLETE_NEEDED, SEC_E.CONTINUE_NEEDED, SEC_E.INCOMPLETE_CREDENTIALS]:
 			return SEC_E(result)
@@ -239,7 +260,9 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 	else:
 		res = _InitializeSecurityContext(byref(creds), byref(ctx), ptarget, int(flags), 0 ,TargetDataRep, byref(token) if token else None, 0, byref(ctx), byref(newbuf), byref(outputflags), byref(expiry))
 	
-	return res, ctx, newbuf, outputflags, expiry
+	data = newbuf.Buffers
+	
+	return res, ctx, data, outputflags, expiry
 	
 def DecryptMessage(ctx, data, message_no = 0):
 	def errc(result, func, arguments):
@@ -252,10 +275,7 @@ def DecryptMessage(ctx, data, message_no = 0):
 	_DecryptMessage.restype  = DWORD
 	_DecryptMessage.errcheck  = errc
 	
-	print(data)
 	data = SecBufferDesc(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA)
-	print('=')
-	print(data[0].Buffer)
 	
 	flags = ULONG()
 	message_no = ULONG(message_no)
