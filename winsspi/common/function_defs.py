@@ -36,6 +36,19 @@ class LUID(Structure):
 
 PLUID = POINTER(LUID)
 
+class SECPKG_ATTR(enum.Enum):
+	SESSION_KEY = 9
+	C_ACCESS_TOKEN = 0x80000012 #The pBuffer parameter contains a pointer to a SecPkgContext_AccessToken structure that specifies the access token for the current security context. This attribute is supported only on the server.
+	C_FULL_ACCESS_TOKEN = 0x80000082 #The pBuffer parameter contains a pointer to a SecPkgContext_AccessToken structure that specifies the access token for the current security context. This attribute is supported only on the server.
+	CERT_TRUST_STATUS = 0x80000084 #The pBuffer parameter contains a pointer to a CERT_TRUST_STATUS structure that specifies trust information about the certificate.This attribute is supported only on the client.
+	CREDS = 0x80000080 # The pBuffer parameter contains a pointer to a SecPkgContext_ClientCreds structure that specifies client credentials. The client credentials can be either user name and password or user name and smart card PIN. This attribute is supported only on the server.
+	CREDS_2 = 0x80000086 #The pBuffer parameter contains a pointer to a SecPkgContext_ClientCreds structure that specifies client credentials. If the client credential is user name and password, the buffer is a packed KERB_INTERACTIVE_LOGON structure. If the client credential is user name and smart card PIN, the buffer is a packed KERB_CERTIFICATE_LOGON structure. If the client credential is an online identity credential, the buffer is a marshaled SEC_WINNT_AUTH_IDENTITY_EX2 structure. This attribute is supported only on the CredSSP server. Windows Server 2008 R2, Windows 7, Windows Server 2008, Windows Vista, Windows Server 2003 and Windows XP:  This value is not supported.
+	NEGOTIATION_PACKAGE = 0x80000081 #The pBuffer parameter contains a pointer to a SecPkgContext_PackageInfo structure that specifies the name of the authentication package negotiated by the Microsoft Negotiate provider.
+	PACKAGE_INFO = 10 #The pBuffer parameter contains a pointer to a SecPkgContext_PackageInfostructure.Returns information on the SSP in use.
+	SERVER_AUTH_FLAGS = 0x80000083 #The pBuffer parameter contains a pointer to a SecPkgContext_Flags structure that specifies information about the flags in the current security context. This attribute is supported only on the client.
+	SIZES = 0x0 #The pBuffer parameter contains a pointer to a SecPkgContext_Sizes structure. Queries the sizes of the structures used in the per-message functions and authentication exchanges.
+	SUBJECT_SECURITY_ATTRIBUTES = 124 #	The pBuffer parameter contains a pointer to a SecPkgContext_SubjectAttributes structure. This value returns information about the security attributes for the connection. This value is supported only on the CredSSP server. Windows Server 2008, Windows Vista, Windows Server 2003 and Windows XP:  This value is not supported.
+
 class SECBUFFER_TYPE(enum.Enum):
 	SECBUFFER_ALERT = 17 #The buffer contains an alert message.
 	SECBUFFER_ATTRMASK = 4026531840 #The buffer contains a bitmask for a SECBUFFER_READONLY_WITH_CHECKSUM buffer.
@@ -76,6 +89,14 @@ class SECBUFFER_TYPE(enum.Enum):
 
 		The buffer is read-only with a checksum
 	"""
+	
+# https://docs.microsoft.com/en-us/windows/desktop/api/sspi/ns-sspi-secpkgcontext_sessionkey
+class SecPkgContext_SessionKey(Structure):
+	_fields_ = [('SessionKeyLength',ULONG),('SessionKey',LPBYTE)]
+	
+	@property
+	def Buffer(self):
+		return ctypes.string_at(self.SessionKey, size=self.SessionKeyLength)
 
 # https://github.com/benjimin/pywebcorp/blob/master/pywebcorp/ctypes_sspi.py
 class SecHandle(Structure): 
@@ -284,32 +305,22 @@ def DecryptMessage(ctx, data, message_no = 0):
 	
 	return data
 	
-if __name__ == '__main__':
-	creds = None
-	#target = 'krbtgt@TEST'
-	#target = 'srv_http@TEST.corp'
-	target = 'WIN2019AD@test.corp'
-	
-	creds = AcquireCredentialsHandle(None, 'KERBEROS', target, SECPKG_CRED.BOTH)
-	print(creds)
-	res, ctx, newbuf, outputflags, expiry = InitializeSecurityContext(creds, target)
-	for i in range(newbuf.cBuffers):
-		print(newbuf[i].Buffer)
 
-"""
-	 ss = AcquireCredentialsHandle (
-			NULL, 
-			lpPackageName,
-			SECPKG_CRED_OUTBOUND,
-			NULL, 
-			NULL, 
-			NULL, 
-			NULL, 
-			hCred,
-			&Lifetime);
-			
-	self.credentials_expiry=win32security.AcquireCredentialsHandle(
-				client_name, self.pkg_info['Name'],
-				sspicon.SECPKG_CRED_OUTBOUND,
-None, auth_info)
-"""
+	
+# https://docs.microsoft.com/en-us/windows/desktop/api/sspi/nf-sspi-querycontextattributesa
+def QueryContextAttributes(ctx, attr, sec_struct):
+	#attr = SECPKG_ATTR enum
+	def errc(result, func, arguments):
+		if SEC_E(result) == SEC_E.OK:
+			return SEC_E(result)
+		raise Exception('%s failed with error code %s (%s)' % ('DecryptMessage', result, SEC_E(result)))
+		
+	_QueryContextAttributes = windll.Secur32.QueryContextAttributesW
+	_QueryContextAttributes.argtypes = [PCtxtHandle, ULONG, PVOID]
+	_QueryContextAttributes.restype  = DWORD
+	_QueryContextAttributes.errcheck  = errc
+	
+	res = _QueryContextAttributes(byref(ctx), attr.value, byref(sec_struct))
+	
+	return
+	

@@ -22,6 +22,11 @@ class SSPI:
 		self.context = None
 		self.package_name = package_name
 		
+	def _get_session_key(self):
+		sec_struct = SecPkgContext_SessionKey()
+		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
+		return sec_struct.Buffer
+		
 	def _get_credentials(self, client_name, target_name, flags = SECPKG_CRED.BOTH):
 		self.cred_struct = AcquireCredentialsHandle(client_name, self.package_name.value, target_name, flags)
 		
@@ -89,6 +94,9 @@ class NegotiateSSPI(SSPI):
 		self.target_name = None
 		self.response_data = queue.Queue()
 		
+	def get_session_key(self):
+		return self._get_session_key()
+		
 	def authGSSClientInit(self, target_name, client_name = None):
 		self.target_name = target_name
 		self.client_name = client_name
@@ -97,7 +105,7 @@ class NegotiateSSPI(SSPI):
 	def authGSSClientStep(self, token_data = None):
 		res, data = self._init_ctx(self.target_name, token_data)
 		self.response_data.put(data[0][1])
-		return res
+		return res, data
 		
 	def authGSSClientResponse(self):
 		return self.response_data.get()
@@ -112,9 +120,12 @@ class KerberosSSPI(SSPI):
 		self.target_name = None		
 		self.response_data = queue.Queue()
 		
+	def get_session_key(self):
+		return self._get_session_key()
+		
 	def authGSSClientInit(self, target_name, client_name = None):
 		self.target_name = target_name
-		self._get_credentials(self, client_name, target_name)
+		self._get_credentials(client_name, target_name)
 		
 	def authGSSClientStep(self, token_data = None):
 		res, data = self._init_ctx(self.target_name, token_data)
@@ -139,6 +150,43 @@ class KerberoastSSPI(SSPI):
 		token = InitialContextToken.load(data[0][1])
 		return token.native['innerContextToken'] #this is the AP_REQ
 		
+class KerberosSMBSSPI(SSPI):
+	def __init__(self, client_name = None):
+		SSPI.__init__(self, SSPIModule.KERBEROS)
+		self.target_name = None
+		self.client_name = client_name
+		
+	def get_session_key(self):
+		return self._get_session_key()
+		
+	def get_ticket_for_spn(self, target_name):
+		self.target_name = target_name
+		self._get_credentials(self.client_name, self.target_name)
+		res, data = self._init_ctx(self.target_name, None)
+		token = InitialContextToken.load(data[0][1])
+		return AP_REQ(token.native['innerContextToken']).dump() #this is the AP_REQ
+		
+		
+class NTLMSMBSSPI(SSPI):
+	def __init__(self, client_name = None):
+		SSPI.__init__(self, SSPIModule.NTLM)
+		self.target_name = None
+		self.client_name = client_name
+		self.flags = ISC_REQ.CONNECTION
+		
+	def get_session_key(self):
+		return self._get_session_key()
+		
+	def negotiate(self):
+		self._get_credentials(self.client_name, self.target_name, flags = SECPKG_CRED.BOTH)
+		res, data = self._init_ctx(self.target_name, None, flags = self.flags)
+		return data[0][1], True	
+		
+	def authenticate(self, autorize_data):
+		res, data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
+		return data[0][1], False
+		
+		
 
 class LDAP3NTLMSSPI(SSPI):
 	def __init__(self, user_name = None, domain = None, password = None):
@@ -149,6 +197,9 @@ class LDAP3NTLMSSPI(SSPI):
 		self.authenticate_data = None
 		#self.flags = ISC_REQ.USE_DCE_STYLE | ISC_REQ.DELEGATE | ISC_REQ.MUTUAL_AUTH |ISC_REQ.REPLAY_DETECT |ISC_REQ.SEQUENCE_DETECT |ISC_REQ.CONFIDENTIALITY |ISC_REQ.CONNECTION
 		self.flags = ISC_REQ.CONNECTION
+		
+	def get_session_key(self):
+		return self._get_session_key()
 		
 	def create_negotiate_message(self):
 		self._get_credentials(self.client_name, self.target_name, flags = SECPKG_CRED.OUTBOUND)
