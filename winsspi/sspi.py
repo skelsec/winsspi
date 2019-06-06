@@ -40,6 +40,10 @@ class SSPI:
 	def _unwrap(self, data, message_no = 0):
 		data_buff = DecryptMessage(self.context, data, message_no)
 		return data_buff
+		
+	def _wrap(self, data, message_no = 0):
+		data_buff = EncryptMessage(self.context, data, message_no)
+		return data_buff
 	
 	def authGSSClientInit(self, client_name, target_name):
 		raise Exception('Not implemented!')
@@ -156,15 +160,27 @@ class KerberosSMBSSPI(SSPI):
 		self.target_name = None
 		self.client_name = client_name
 		
+	def encrypt(self, data, message_no):
+		return self._wrap(data, message_no)
+		
+	def decrypt(self, data, message_no):
+		return self._unwrap(data, message_no)
+		
 	def get_session_key(self):
 		return self._get_session_key()
 		
-	def get_ticket_for_spn(self, target_name):
+	def get_ticket_for_spn(self, target_name, flags = None, is_rpc = False, token_data = None):
 		self.target_name = target_name
-		self._get_credentials(self.client_name, self.target_name)
-		res, data = self._init_ctx(self.target_name, None)
-		token = InitialContextToken.load(data[0][1])
-		return AP_REQ(token.native['innerContextToken']).dump() #this is the AP_REQ
+		if not self.cred_struct:
+			self._get_credentials(self.client_name, self.target_name)
+		
+		if is_rpc == True:
+			res, data = self._init_ctx(self.target_name, token_data = token_data, flags = flags)			
+			return data[0][1]
+		else:
+			res, data = self._init_ctx(self.target_name)
+			token = InitialContextToken.load(data[0][1])
+			return AP_REQ(token.native['innerContextToken']).dump() #this is the AP_REQ
 		
 		
 class NTLMSMBSSPI(SSPI):
@@ -177,14 +193,24 @@ class NTLMSMBSSPI(SSPI):
 	def get_session_key(self):
 		return self._get_session_key()
 		
-	def negotiate(self):
+	def negotiate(self, is_rpc = False):
 		self._get_credentials(self.client_name, self.target_name, flags = SECPKG_CRED.BOTH)
+		if is_rpc == True:
+			self.flags = ISC_REQ.REPLAY_DETECT | ISC_REQ.CONFIDENTIALITY| ISC_REQ.USE_SESSION_KEY| ISC_REQ.INTEGRITY| ISC_REQ.SEQUENCE_DETECT| ISC_REQ.CONNECTION
 		res, data = self._init_ctx(self.target_name, None, flags = self.flags)
 		return data[0][1], True	
 		
-	def authenticate(self, autorize_data):
+	def authenticate(self, autorize_data, is_rpc = False):
+		if is_rpc == True:
+			self.flags = ISC_REQ.REPLAY_DETECT | ISC_REQ.CONFIDENTIALITY| ISC_REQ.USE_SESSION_KEY| ISC_REQ.INTEGRITY| ISC_REQ.SEQUENCE_DETECT| ISC_REQ.CONNECTION
 		res, data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
 		return data[0][1], False
+		
+	def encrypt(self, data, message_no):
+		return self._wrap(data, message_no)
+		
+	def decrypt(self, data, message_no):
+		return self._unwrap(data, message_no)
 		
 		
 

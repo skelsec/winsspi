@@ -49,6 +49,7 @@ class SECPKG_ATTR(enum.Enum):
 	SIZES = 0x0 #The pBuffer parameter contains a pointer to a SecPkgContext_Sizes structure. Queries the sizes of the structures used in the per-message functions and authentication exchanges.
 	SUBJECT_SECURITY_ATTRIBUTES = 124 #	The pBuffer parameter contains a pointer to a SecPkgContext_SubjectAttributes structure. This value returns information about the security attributes for the connection. This value is supported only on the CredSSP server. Windows Server 2008, Windows Vista, Windows Server 2003 and Windows XP:  This value is not supported.
 
+# https://docs.microsoft.com/en-us/windows/desktop/api/sspi/ns-sspi-_secbuffer
 class SECBUFFER_TYPE(enum.Enum):
 	SECBUFFER_ALERT = 17 #The buffer contains an alert message.
 	SECBUFFER_ATTRMASK = 4026531840 #The buffer contains a bitmask for a SECBUFFER_READONLY_WITH_CHECKSUM buffer.
@@ -75,6 +76,7 @@ class SECBUFFER_TYPE(enum.Enum):
 	SECBUFFER_TOKEN = 2 #The buffer contains the security token portion of the message. This is read-only for input parameters or read/write for output parameters.
 	SECBUFFER_TOKEN_BINDING = 21 #The buffer contains the supported token binding protocol version and key parameters, in descending order of preference.
 	SECBUFFER_APPLICATION_PROTOCOLS = 18 #The buffer contains a list of application protocol IDs, one list per application protocol negotiation extension type to be enabled.
+	SECBUFFER_PADDING = 9 
 	"""
 	In addition, BufferType can combine the following flags with any of the flags in the preceding table by using a bitwise-OR operation.
 	Value 	Meaning
@@ -118,14 +120,37 @@ class SecBuffer(Structure):
 	def Buffer(self):
 		return (SECBUFFER_TYPE(self.BufferType), ctypes.string_at(self.pvBuffer, size=self.cbBuffer))	 
 	
+#class SecBufferDesc(Structure):
+#	"""Descriptor stores SECBUFFER_VERSION=0, number of buffers (e.g. one),
+#	and POINTER to an array of SecBuffer structs."""
+#	_fields_ = [('ulVersion',ULONG),('cBuffers',ULONG),('pBuffers',POINTER(SecBuffer))]
+#	def __init__(self, *args, **kwargs):
+#		Structure.__init__(self,0,1,byref(SecBuffer(*args, **kwargs)))
+#	def __getitem__(self, index):
+#		return self.pBuffers[index]
+#		
+#	@property
+#	def Buffers(self):
+#		data = []
+#		for i in range(self.cBuffers):
+#			data.append(self.pBuffers[i].Buffer)
+#		return data
+
 class SecBufferDesc(Structure):
 	"""Descriptor stores SECBUFFER_VERSION=0, number of buffers (e.g. one),
 	and POINTER to an array of SecBuffer structs."""
 	_fields_ = [('ulVersion',ULONG),('cBuffers',ULONG),('pBuffers',POINTER(SecBuffer))]
-	def __init__(self, *args, **kwargs):
-		Structure.__init__(self,0,1,byref(SecBuffer(*args, **kwargs)))
+	def __init__(self, secbuffers = None):
+		#secbuffers = a list of security buffers (SecBuffer)
+		if secbuffers is not None:
+			print((SecBuffer * len(secbuffers))(*secbuffers))
+			print((SecBuffer * len(secbuffers))(*secbuffers)[0])
+			Structure.__init__(self,0,len(secbuffers),(SecBuffer * len(secbuffers))(*secbuffers))
+		else:
+			Structure.__init__(self,0,1,byref(SecBuffer()))
 	def __getitem__(self, index):
 		return self.pBuffers[index]
+		
 	@property
 	def Buffers(self):
 		data = []
@@ -176,7 +201,8 @@ class SECPKG_CRED(enum.IntFlag):
 	PROCESS_POLICY_ONLY = 0x00000020 	#The function processes server policy and returns SEC_E_NO_CREDENTIALS, indicating that the application should prompt for credentials.
 										#This value is supported only by the Negotiate security package.
 										#Windows Server 2008, Windows Vista, Windows Server 2003 and Windows XP:  This value is not supported.
-	
+
+
 class ISC_REQ(enum.IntFlag):
 	DELEGATE = 1
 	MUTUAL_AUTH = 2
@@ -271,8 +297,9 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 	outputflags = ULONG()
 	expiry = TimeStamp()
 	
+	input('InitializeSecurityContext token : %s' % token)
 	if token:
-		token = SecBufferDesc(token)
+		token = SecBufferDesc([SecBuffer(token)])
 		
 	
 	if not ctx:
@@ -282,6 +309,7 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 		res = _InitializeSecurityContext(byref(creds), byref(ctx), ptarget, int(flags), 0 ,TargetDataRep, byref(token) if token else None, 0, byref(ctx), byref(newbuf), byref(outputflags), byref(expiry))
 	
 	data = newbuf.Buffers
+	input(ISC_REQ(outputflags.value))
 	
 	return res, ctx, data, outputflags, expiry
 	
@@ -296,14 +324,47 @@ def DecryptMessage(ctx, data, message_no = 0):
 	_DecryptMessage.restype  = DWORD
 	_DecryptMessage.errcheck  = errc
 	
-	data = SecBufferDesc(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA)
+	secbuffers = []
+	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
+	
+	data = SecBufferDesc(secbuffers)
 	
 	flags = ULONG()
 	message_no = ULONG(message_no)
 
 	res = _DecryptMessage(byref(ctx), byref(data), message_no, byref(flags))
 	
-	return data
+	return data.Buffers
+	
+def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
+	def errc(result, func, arguments):
+		if SEC_E(result) == SEC_E.OK:
+			return SEC_E(result)
+		raise Exception('%s failed with error code %s (%s)' % ('EncryptMessage', result, SEC_E(result)))
+		
+	_EncryptMessage = windll.Secur32.EncryptMessage
+	_EncryptMessage.argtypes = [PCtxtHandle, ULONG, PSecBufferDesc, ULONG]
+	_EncryptMessage.restype  = DWORD
+	_EncryptMessage.errcheck  = errc
+	
+	print(ctx)
+	print('Encryptmessage: %s' % data)
+	secbuffers = []
+	secbuffers.append(SecBuffer(token = b'', buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_HEADER))
+	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
+	secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_TRAILER))
+	secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_EMPTY))
+	
+	data = SecBufferDesc(secbuffers)
+	print(data.cBuffers)
+	print(data.Buffers)
+	
+	flags = ULONG()
+	message_no = ULONG(message_no)
+
+	res = _EncryptMessage(byref(ctx), flags, byref(data), message_no)
+	
+	return data.Buffers
 	
 
 	
@@ -313,7 +374,7 @@ def QueryContextAttributes(ctx, attr, sec_struct):
 	def errc(result, func, arguments):
 		if SEC_E(result) == SEC_E.OK:
 			return SEC_E(result)
-		raise Exception('%s failed with error code %s (%s)' % ('DecryptMessage', result, SEC_E(result)))
+		raise Exception('%s failed with error code %s (%s)' % ('QueryContextAttributes', result, SEC_E(result)))
 		
 	_QueryContextAttributes = windll.Secur32.QueryContextAttributesW
 	_QueryContextAttributes.argtypes = [PCtxtHandle, ULONG, PVOID]
