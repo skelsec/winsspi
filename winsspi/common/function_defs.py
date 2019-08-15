@@ -143,8 +143,6 @@ class SecBufferDesc(Structure):
 	def __init__(self, secbuffers = None):
 		#secbuffers = a list of security buffers (SecBuffer)
 		if secbuffers is not None:
-			print((SecBuffer * len(secbuffers))(*secbuffers))
-			print((SecBuffer * len(secbuffers))(*secbuffers)[0])
 			Structure.__init__(self,0,len(secbuffers),(SecBuffer * len(secbuffers))(*secbuffers))
 		else:
 			Structure.__init__(self,0,1,byref(SecBuffer()))
@@ -297,7 +295,6 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 	outputflags = ULONG()
 	expiry = TimeStamp()
 	
-	input('InitializeSecurityContext token : %s' % token)
 	if token:
 		token = SecBufferDesc([SecBuffer(token)])
 		
@@ -309,7 +306,6 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 		res = _InitializeSecurityContext(byref(creds), byref(ctx), ptarget, int(flags), 0 ,TargetDataRep, byref(token) if token else None, 0, byref(ctx), byref(newbuf), byref(outputflags), byref(expiry))
 	
 	data = newbuf.Buffers
-	input(ISC_REQ(outputflags.value))
 	
 	return res, ctx, data, outputflags, expiry
 	
