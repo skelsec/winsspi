@@ -39,7 +39,7 @@ setup(
 	# long_description=open("README.txt").read(),
 	python_requires='>=3.6',
 	install_requires=[
-		'minikerberos',
+		'minikerberos>=0.2.0',
 	],
 	
 	classifiers=(

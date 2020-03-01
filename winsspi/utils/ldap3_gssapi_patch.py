@@ -1,5 +1,6 @@
 from minikerberos.sspi.kerberosspi import KerberosSSPI, SSPIResult
 from ldap3.protocol.sasl.sasl import send_sasl_negotiation, abort_sasl_negotiation
+import socket
 
 def sasl_gssapi(connection, controls):
 	print('MONKEY!')

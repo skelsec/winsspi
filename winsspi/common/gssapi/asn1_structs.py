@@ -1,9 +1,10 @@
 from asn1crypto.core import ObjectIdentifier,Choice, Any, SequenceOf, BitString, Sequence, GeneralString, OctetString, Enumerated, Boolean
-from minikerberos.asn1_structs import *
+from minikerberos.protocol.asn1_structs import krb5int32, APOptions, Ticket, EncryptedData
 
 UNIVERSAL = 0
 APPLICATION = 1
 CONTEXT = 2
+TAG = 'explicit'
 
 class MechType(ObjectIdentifier):
 	_map = { 
@@ -18,7 +19,7 @@ class MechType(ObjectIdentifier):
 class MechTypes(SequenceOf):
 	_child_spec = MechType
 	
-class AP_REQ(core.Sequence):
+class AP_REQ(Sequence):
 	explicit = (APPLICATION, 14)
 	_fields = [
 		('pvno', krb5int32, {'tag_type': TAG, 'tag': 0}),

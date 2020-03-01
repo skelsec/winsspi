@@ -1,7 +1,9 @@
-from .defines import *
+from winsspi.common.defines import CHAR, PCHAR, DWORD, POINTER, \
+	Structure, LONG, ULONG, PVOID, LPBYTE, LPSTR, PULONG
 import enum
 import datetime
 import ctypes
+from ctypes import byref, sizeof, windll
 
 # call API to get max token size, or..
 maxtoken_size = 2880 # bytes
