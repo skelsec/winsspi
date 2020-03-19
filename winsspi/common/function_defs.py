@@ -1,9 +1,9 @@
 from winsspi.common.defines import CHAR, PCHAR, DWORD, POINTER, \
-	Structure, LONG, ULONG, PVOID, LPBYTE, LPSTR, PULONG
+	Structure, LONG, ULONG, PVOID, LPBYTE, LPSTR, PULONG, byref, \
+	sizeof, windll
 import enum
 import datetime
 import ctypes
-from ctypes import byref, sizeof, windll
 
 # call API to get max token size, or..
 maxtoken_size = 2880 # bytes
@@ -309,7 +309,7 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 	
 	data = newbuf.Buffers
 	
-	return res, ctx, data, outputflags, expiry
+	return res, ctx, data, ISC_REQ(outputflags.value), expiry
 	
 def DecryptMessage(ctx, data, message_no = 0):
 	def errc(result, func, arguments):
@@ -335,6 +335,7 @@ def DecryptMessage(ctx, data, message_no = 0):
 	return data.Buffers
 	
 def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
+	raise NotImplementedError()
 	def errc(result, func, arguments):
 		if SEC_E(result) == SEC_E.OK:
 			return SEC_E(result)
@@ -345,8 +346,6 @@ def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	_EncryptMessage.restype  = DWORD
 	_EncryptMessage.errcheck  = errc
 	
-	print(ctx)
-	print('Encryptmessage: %s' % data)
 	secbuffers = []
 	secbuffers.append(SecBuffer(token = b'', buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_HEADER))
 	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
@@ -354,8 +353,6 @@ def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_EMPTY))
 	
 	data = SecBufferDesc(secbuffers)
-	print(data.cBuffers)
-	print(data.Buffers)
 	
 	flags = ULONG()
 	message_no = ULONG(message_no)

@@ -239,3 +239,79 @@ class LDAP3NTLMSSPI(SSPI):
 	def parse_challenge_message(self, autorize_data):
 		res, data = self._init_ctx(self.target_name, autorize_data, flags = self.flags)
 		self.authenticate_data = data[0][1]
+
+class KerberosMSLDAPSSPI:
+	def __init__(self, domain = None, username = None, password = None, credusage_flags = SECPKG_CRED.BOTH):
+		SSPI.__init__(self, SSPIModule.KERBEROS)
+		self.target_name = None
+		self.domain = domain
+		self.username = username
+		self.password = password
+		self.credusage_flags = credusage_flags
+		self.ctx_flags = None
+		self.ctx_outflags = None
+		
+	def get_session_key(self):
+		sec_struct = SecPkgContext_SessionKey()
+		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
+		return sec_struct.Buffer
+		
+	def get_ticket_for_spn(self, target_name, ctx_flags = ISC_REQ.CONNECTION):
+		self.ctx_flags = ctx_flags
+		self.target_name = target_name
+		self.cred_struct = AcquireCredentialsHandle(self.username, 'KERBEROS', self.target_name, self.credusage_flags)
+		res, self.context, data, self.ctx_outflags, expiry = InitializeSecurityContext(
+			self.cred_struct, 
+			self.target_name, 
+			token = None, 
+			ctx = None, 
+			flags = self.ctx_flags
+		)
+		token = InitialContextToken.load(data[0][1])
+		return AP_REQ(token.native['innerContextToken']).dump(), ISC_REQ(self.ctx_outflags.value)
+
+
+class NTLMMSLDAPSSPI:
+	def __init__(self, client_name = None, target_name = None, credusage_flags = SECPKG_CRED.BOTH):
+		self.target_name = target_name
+		self.client_name = client_name
+		self.credusage_flags = credusage_flags
+		self.ctx_flags = None
+		self.ctx_outflags = None
+		self.context = None
+
+		self.cred_struct = None
+		
+	def get_session_key(self):
+		sec_struct = SecPkgContext_SessionKey()
+		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
+		return sec_struct.Buffer
+		
+	def negotiate(self, is_rpc = False, ctx_flags = ISC_REQ.CONNECTION ):
+		self.ctx_flags = ctx_flags
+		self.cred_struct = AcquireCredentialsHandle(self.client_name, 'NTLM', self.target_name, self.credusage_flags)
+		res, self.context, data, self.ctx_outflags, expiry = InitializeSecurityContext(
+			self.cred_struct, 
+			self.target_name, 
+			token = None, 
+			ctx = None, 
+			flags = self.ctx_flags
+		)
+		if res == SEC_E.OK:
+			return data[0][1], True	
+		else:
+			return data[0][1], True	
+		
+	def authenticate(self, autorize_data, is_rpc = False, ctx_flags = ISC_REQ.CONNECTION):
+		res, self.context, data, self.ctx_outflags, expiry = InitializeSecurityContext(
+			self.cred_struct, 
+			self.target_name, 
+			token = autorize_data, 
+			ctx = self.context, 
+			flags = self.ctx_outflags
+		)
+		if res == SEC_E.OK:
+			return data[0][1], True	
+		else:
+			return data[0][1], True	
+		
