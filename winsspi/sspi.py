@@ -250,23 +250,30 @@ class KerberosMSLDAPSSPI:
 		self.credusage_flags = credusage_flags
 		self.ctx_flags = None
 		self.ctx_outflags = None
+		self.context = None
+		self.cred_struct = None
 		
 	def get_session_key(self):
 		sec_struct = SecPkgContext_SessionKey()
 		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
 		return sec_struct.Buffer
 		
-	def get_ticket_for_spn(self, target_name, ctx_flags = ISC_REQ.CONNECTION):
+	def get_ticket_for_spn(self, target_name, ctx_flags = ISC_REQ.CONNECTION, token_data = None):
 		self.ctx_flags = ctx_flags
 		self.target_name = target_name
-		self.cred_struct = AcquireCredentialsHandle(self.username, 'KERBEROS', self.target_name, self.credusage_flags)
+		if self.cred_struct is None:
+			self.cred_struct = AcquireCredentialsHandle(self.username, 'KERBEROS', self.target_name, self.credusage_flags)
+		
 		res, self.context, data, self.ctx_outflags, expiry = InitializeSecurityContext(
 			self.cred_struct, 
 			self.target_name, 
-			token = None, 
-			ctx = None, 
-			flags = self.ctx_flags
+			token = token_data, 
+			ctx = self.context, 
+			flags = self.ctx_flags if self.ctx_outflags is None else self.ctx_outflags
 		)
+		if ISC_REQ.MUTUAL_AUTH in ISC_REQ(self.ctx_outflags.value) or ISC_REQ.USE_DCE_STYLE in ISC_REQ(self.ctx_outflags.value):
+			return data[0][1], ISC_REQ(self.ctx_outflags.value)
+		
 		token = InitialContextToken.load(data[0][1])
 		return AP_REQ(token.native['innerContextToken']).dump(), ISC_REQ(self.ctx_outflags.value)
 
