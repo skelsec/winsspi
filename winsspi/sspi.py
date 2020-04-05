@@ -31,7 +31,9 @@ class SSPI:
 		self.cred_struct = AcquireCredentialsHandle(client_name, self.package_name.value, target_name, flags)
 		
 	def _init_ctx(self, target, token_data = None, flags = ISC_REQ.INTEGRITY | ISC_REQ.CONFIDENTIALITY | ISC_REQ.SEQUENCE_DETECT | ISC_REQ.REPLAY_DETECT):
+		print('inflags: %s' % flags)
 		res, self.context, data, outputflags, expiry = InitializeSecurityContext(self.cred_struct, target, token = token_data, ctx = self.context, flags = flags)
+		print('outflags: %s' % ISC_REQ(outputflags))
 		if res == SEC_E.OK:
 			return SSPIResult.OK, data
 		else:
@@ -153,12 +155,25 @@ class KerberoastSSPI(SSPI):
 		res, data = self._init_ctx(self.target_name, None)
 		token = InitialContextToken.load(data[0][1])
 		return token.native['innerContextToken'] #this is the AP_REQ
+
+
+class KerberoastSSPI2(SSPI):
+	def __init__(self):
+		SSPI.__init__(self, SSPIModule.KERBEROS)
+		self.target_name = None
+		
+	def get_ticket_for_spn(self, target_name, flags = ISC_REQ.INTEGRITY | ISC_REQ.CONFIDENTIALITY | ISC_REQ.SEQUENCE_DETECT | ISC_REQ.REPLAY_DETECT):
+		self.target_name = target_name
+		self._get_credentials(None, target_name)
+		res, data = self._init_ctx(self.target_name, None, flags=flags)
+		
+		return data[0][1]
 		
 class KerberosSMBSSPI(SSPI):
 	def __init__(self, client_name = None):
 		SSPI.__init__(self, SSPIModule.KERBEROS)
 		self.target_name = None
-		self.client_name = client_name
+		self.client_name = None #client_name
 		
 	def encrypt(self, data, message_no):
 		return self._wrap(data, message_no)
@@ -170,6 +185,7 @@ class KerberosSMBSSPI(SSPI):
 		return self._get_session_key()
 		
 	def get_ticket_for_spn(self, target_name, flags = None, is_rpc = False, token_data = None):
+		print(target_name)
 		self.target_name = target_name
 		if not self.cred_struct:
 			self._get_credentials(self.client_name, self.target_name)
@@ -178,7 +194,7 @@ class KerberosSMBSSPI(SSPI):
 			res, data = self._init_ctx(self.target_name, token_data = token_data, flags = flags)			
 			return data[0][1]
 		else:
-			res, data = self._init_ctx(self.target_name)
+			res, data = self._init_ctx(self.target_name, flags = flags)
 			token = InitialContextToken.load(data[0][1])
 			return AP_REQ(token.native['innerContextToken']).dump() #this is the AP_REQ
 		
@@ -254,9 +270,12 @@ class KerberosMSLDAPSSPI:
 		self.cred_struct = None
 		
 	def get_session_key(self):
-		sec_struct = SecPkgContext_SessionKey()
-		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
-		return sec_struct.Buffer
+		try:
+			sec_struct = SecPkgContext_SessionKey()
+			QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
+			return sec_struct.Buffer, None
+		except Exception as e:
+			return None, e
 		
 	def get_ticket_for_spn(self, target_name, ctx_flags = ISC_REQ.CONNECTION, token_data = None):
 		self.ctx_flags = ctx_flags

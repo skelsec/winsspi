@@ -4,6 +4,7 @@ from winsspi.common.defines import CHAR, PCHAR, DWORD, POINTER, \
 import enum
 import datetime
 import ctypes
+from minikerberos.gssapi.gssapi import GSSWrapToken
 
 # call API to get max token size, or..
 maxtoken_size = 2880 # bytes
@@ -333,6 +334,32 @@ def DecryptMessage(ctx, data, message_no = 0):
 	res = _DecryptMessage(byref(ctx), byref(data), message_no, byref(flags))
 	
 	return data.Buffers
+
+def GetSequenceNumberFromEncryptdataKerberos(ctx):
+	def errc(result, func, arguments):
+		if SEC_E(result) == SEC_E.OK:
+			return SEC_E(result)
+		raise Exception('%s failed with error code %s (%s)' % ('EncryptMessage', result, SEC_E(result)))
+		
+	_EncryptMessage = windll.Secur32.EncryptMessage
+	_EncryptMessage.argtypes = [PCtxtHandle, ULONG, PSecBufferDesc, ULONG]
+	_EncryptMessage.restype  = DWORD
+	_EncryptMessage.errcheck  = errc
+	
+	data = b'HAHAHAHAHAHAHAHA'
+
+	secbuffers = []
+	secbuffers.append(SecBuffer(token=b'\x00'*1024, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN)) #tthe correct size should be checked but that's another api call..
+	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
+	
+	data = SecBufferDesc(secbuffers)
+	
+	flags = ULONG(1)
+	message_no = ULONG(0)
+
+	res = _EncryptMessage(ctx, flags, byref(data), message_no)
+	tok = GSSWrapToken.from_bytes(data.Buffers[0][1])
+	return tok.SND_SEQ
 	
 def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	raise NotImplementedError()
@@ -347,19 +374,21 @@ def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	_EncryptMessage.errcheck  = errc
 	
 	secbuffers = []
-	secbuffers.append(SecBuffer(token = b'', buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_HEADER))
+	#secbuffers.append(SecBuffer(token=b'\x00'*1024, buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_HEADER))
+	secbuffers.append(SecBuffer(token=b'\x00'*1024, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN))
 	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
-	secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_TRAILER))
-	secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_EMPTY))
+	#secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_PADDING))
+	#secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_EMPTY))
 	
 	data = SecBufferDesc(secbuffers)
+	print(data)
 	
-	flags = ULONG()
+	flags = ULONG(1)
 	message_no = ULONG(message_no)
 
-	res = _EncryptMessage(byref(ctx), flags, byref(data), message_no)
-	
-	return data.Buffers
+	res = _EncryptMessage(ctx, flags, byref(data), message_no)
+	print(data)
+	return res, data.Buffers
 	
 
 	
