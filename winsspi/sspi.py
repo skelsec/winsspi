@@ -31,9 +31,7 @@ class SSPI:
 		self.cred_struct = AcquireCredentialsHandle(client_name, self.package_name.value, target_name, flags)
 		
 	def _init_ctx(self, target, token_data = None, flags = ISC_REQ.INTEGRITY | ISC_REQ.CONFIDENTIALITY | ISC_REQ.SEQUENCE_DETECT | ISC_REQ.REPLAY_DETECT):
-		print('inflags: %s' % flags)
 		res, self.context, data, outputflags, expiry = InitializeSecurityContext(self.cred_struct, target, token = token_data, ctx = self.context, flags = flags)
-		print('outflags: %s' % ISC_REQ(outputflags))
 		if res == SEC_E.OK:
 			return SSPIResult.OK, data
 		else:
@@ -185,18 +183,21 @@ class KerberosSMBSSPI(SSPI):
 		return self._get_session_key()
 		
 	def get_ticket_for_spn(self, target_name, flags = None, is_rpc = False, token_data = None):
-		print(target_name)
-		self.target_name = target_name
-		if not self.cred_struct:
-			self._get_credentials(self.client_name, self.target_name)
-		
-		if is_rpc == True:
-			res, data = self._init_ctx(self.target_name, token_data = token_data, flags = flags)			
-			return data[0][1]
-		else:
-			res, data = self._init_ctx(self.target_name, flags = flags)
-			token = InitialContextToken.load(data[0][1])
-			return AP_REQ(token.native['innerContextToken']).dump() #this is the AP_REQ
+		try:
+			self.target_name = target_name
+			if not self.cred_struct:
+				self._get_credentials(self.client_name, self.target_name)
+			
+			if is_rpc == True:
+				res, self.context, data, outputflags, expiry = InitializeSecurityContext(self.cred_struct, self.target_name, token = token_data, ctx = self.context, flags = flags)
+				return data[0][1], outputflags, None
+			else:
+				res, self.context, data, outputflags, expiry = InitializeSecurityContext(self.cred_struct, self.target_name, token = None, ctx = self.context, flags = flags)
+				#res, data = self._init_ctx(self.target_name, flags = flags)
+				token = InitialContextToken.load(data[0][1])
+				return AP_REQ(token.native['innerContextToken']).dump(),  outputflags, None #this is the AP_REQ
+		except Exception as e:
+			return None, None, e
 		
 		
 class NTLMSMBSSPI(SSPI):
