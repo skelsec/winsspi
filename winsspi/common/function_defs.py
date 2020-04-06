@@ -51,6 +51,7 @@ class SECPKG_ATTR(enum.Enum):
 	SERVER_AUTH_FLAGS = 0x80000083 #The pBuffer parameter contains a pointer to a SecPkgContext_Flags structure that specifies information about the flags in the current security context. This attribute is supported only on the client.
 	SIZES = 0x0 #The pBuffer parameter contains a pointer to a SecPkgContext_Sizes structure. Queries the sizes of the structures used in the per-message functions and authentication exchanges.
 	SUBJECT_SECURITY_ATTRIBUTES = 124 #	The pBuffer parameter contains a pointer to a SecPkgContext_SubjectAttributes structure. This value returns information about the security attributes for the connection. This value is supported only on the CredSSP server. Windows Server 2008, Windows Vista, Windows Server 2003 and Windows XP:  This value is not supported.
+	ENDPOINT_BINDINGS = 26
 
 # https://docs.microsoft.com/en-us/windows/desktop/api/sspi/ns-sspi-_secbuffer
 class SECBUFFER_TYPE(enum.Enum):
@@ -172,24 +173,80 @@ PCtxtHandle = PSecHandle
 class SEC_E(enum.Enum):
 	OK = 0x00000000 
 	CONTINUE_NEEDED = 0x00090312 
-	INSUFFICIENT_MEMORY = 0x80090300 #There is not enough memory available to complete the requested action.
-	INTERNAL_ERROR = 0x80090304 #An error occurred that did not map to an SSPI error code.
-	INVALID_HANDLE = 0x80090301
-	INVALID_TOKEN = 0x80090308
-	LOGON_DENIED = 0x8009030C
-	NO_AUTHENTICATING_AUTHORITY = 0x80090311
-	NO_CREDENTIALS = 0x8009030E #No credentials are available in the security package.
-	TARGET_UNKNOWN = 0x80090303
-	UNSUPPORTED_FUNCTION = 0x80090302
-	WRONG_PRINCIPAL = 0x80090322
-	NOT_OWNER = 0x80090306 #The caller of the function does not have the necessary credentials.
-	SECPKG_NOT_FOUND = 0x80090305 #The requested security package does not exist.
-	UNKNOWN_CREDENTIALS = 0x8009030D #The credentials supplied to the package were not recognized.
-	#SEC_I
+	INSUFFICIENT_MEMORY = 0x80090300 #Not enough memory is available to complete this request.
+	INVALID_HANDLE = 0x80090301 #The handle specified is invalid.
+	UNSUPPORTED_FUNCTION = 0x80090302 #The function requested is not supported.
+	TARGET_UNKNOWN = 0x80090303 #The specified target is unknown or unreachable.
+	INTERNAL_ERROR = 0x80090304 #The Local Security Authority (LSA) cannot be contacted.
+	SECPKG_NOT_FOUND = 0x80090305  #The requested security package does not exist.
+	NOT_OWNER = 0x80090306  #The caller is not the owner of the desired credentials.
+	CANNOT_INSTALL = 0x80090307  #The security package failed to initialize and cannot be installed.
+	INVALID_TOKEN = 0x80090308  #The token supplied to the function is invalid.
+	CANNOT_PACK = 0x80090309  #The security package is not able to marshal the logon buffer, so the logon attempt has failed.
+	QOP_NOT_SUPPORTED = 0x8009030A  #The per-message quality of protection is not supported by the security package.
+	NO_IMPERSONATION = 0x8009030B  #The security context does not allow impersonation of the client.
+	LOGON_DENIED = 0x8009030C  #The logon attempt failed.
+	UNKNOWN_CREDENTIALS = 0x8009030D  #The credentials supplied to the package were not recognized.
+	NO_CREDENTIALS = 0x8009030E  #No credentials are available in the security package.
+	MESSAGE_ALTERED = 0x8009030F  #The message or signature supplied for verification has been altered.
+	OUT_OF_SEQUENCE = 0x80090310  #The message supplied for verification is out of sequence.
+	NO_AUTHENTICATING_AUTHORITY = 0x80090311  #No authority could be contacted for authentication.
+	BAD_PKGID = 0x80090316  #The requested security package does not exist.
+	CONTEXT_EXPIRED = 0x80090317  #The context has expired and can no longer be used.
+	INCOMPLETE_MESSAGE = 0x80090318  #The supplied message is incomplete. The signature was not verified.
+	INCOMPLETE_CREDENTIALS = 0x80090320  #The credentials supplied were not complete and could not be verified. The context could not be initialized.
+	BUFFER_TOO_SMALL = 0x80090321  #The buffers supplied to a function was too small.
+	WRONG_PRINCIPAL = 0x80090322  #The target principal name is incorrect.
+	TIME_SKEW = 0x80090324  #The clocks on the client and server machines are skewed.
+	UNTRUSTED_ROOT = 0x80090325  #The certificate chain was issued by an authority that is not trusted.
+	ILLEGAL_MESSAGE = 0x80090326  #The message received was unexpected or badly formatted.
+	CERT_UNKNOWN = 0x80090327  #An unknown error occurred while processing the certificate.
+	CERT_EXPIRED = 0x80090328  # The received certificate has expired.
+	ENCRYPT_FAILURE = 0x80090329  #The specified data could not be encrypted.
+	DECRYPT_FAILURE = 0x80090330  #The specified data could not be decrypted.
+	ALGORITHM_MISMATCH = 0x80090331  #The client and server cannot communicate because they do not possess a common algorithm.
+	SECURITY_QOS_FAILED = 0x80090332  #The security context could not be established due to a failure in the requested quality of service (for example, mutual authentication or delegation).
+	UNFINISHED_CONTEXT_DELETED = 0x80090333  #A security context was deleted before the context was completed. This is considered a logon failure.
+	NO_TGT_REPLY = 0x80090334  #The client is trying to negotiate a context and the server requires user-to-user but did not send a ticket granting ticket (TGT) reply.
+	NO_IP_ADDRESSES = 0x80090335  #Unable to accomplish the requested task because the local machine does not have an IP addresses.
+	WRONG_CREDENTIAL_HANDLE = 0x80090336  #The supplied credential handle does not match the credential associated with the security context.
+	CRYPTO_SYSTEM_INVALID = 0x80090337  #The cryptographic system or checksum function is invalid because a required function is unavailable.
+	MAX_REFERRALS_EXCEEDED = 0x80090338  #The number of maximum ticket referrals has been exceeded.
+	MUST_BE_KDC = 0x80090339  #The local machine must be a Kerberos domain controller (KDC), and it is not.
+	STRONG_CRYPTO_NOT_SUPPORTED = 0x8009033A  #The other end of the security negotiation requires strong cryptographics, but it is not supported on the local machine.
+	TOO_MANY_PRINCIPALS = 0x8009033B  #The KDC reply contained more than one principal name.
+	NO_PA_DATA = 0x8009033C  #Expected to find PA data for a hint of what etype to use, but it was not found.
+	PKINIT_NAME_MISMATCH = 0x8009033D  #The client certificate does not contain a valid user principal name (UPN), or does not match the client name in the logon request. Contact your administrator.
+	SMARTCARD_LOGON_REQUIRED = 0x8009033E  #Smart card logon is required and was not used.
+	SHUTDOWN_IN_PROGRESS = 0x8009033F  #A system shutdown is in progress.
+	KDC_INVALID_REQUEST = 0x80090340  #An invalid request was sent to the KDC.
+	KDC_UNABLE_TO_REFER = 0x80090341  #The KDC was unable to generate a referral for the service requested.
+	KDC_UNKNOWN_ETYPE = 0x80090342  #The encryption type requested is not supported by the KDC.
+	UNSUPPORTED_PREAUTH = 0x80090343  #An unsupported pre-authentication mechanism was presented to the Kerberos package.
+	DELEGATION_REQUIRED = 0x80090345  #The requested operation cannot be completed. The computer must be trusted for delegation, and the current user account must be configured to allow delegation.
+	BAD_BINDINGS = 0x80090346  #Client's supplied Security Support Provider Interface (SSPI) channel bindings were incorrect.
+	MULTIPLE_ACCOUNTS = 0x80090347  #The received certificate was mapped to multiple accounts.
+	NO_KERB_KEY = 0x80090348  #No Kerberos key was found.
+	CERT_WRONG_USAGE = 0x80090349  #The certificate is not valid for the requested usage.
+	DOWNGRADE_DETECTED = 0x80090350  #The system detected a possible attempt to compromise security. Ensure that you can contact the server that authenticated you.
+	SMARTCARD_CERT_REVOKED = 0x80090351  #The smart card certificate used for authentication has been revoked. Contact your system administrator. The event log might contain additional information.
+	ISSUING_CA_UNTRUSTED = 0x80090352  #An untrusted certification authority (CA) was detected while processing the smart card certificate used for authentication. Contact your system administrator.
+	REVOCATION_OFFLINE_C = 0x80090353  #The revocation status of the smart card certificate used for authentication could not be determined. Contact your system administrator.
+	PKINIT_CLIENT_FAILURE = 0x80090354  #The smart card certificate used for authentication was not trusted. Contact your system administrator.
+	SMARTCARD_CERT_EXPIRED = 0x80090355  #The smart card certificate used for authentication has expired. Contact your system administrator.
+	NO_S4U_PROT_SUPPORT = 0x80090356  #The Kerberos subsystem encountered an error. A service for user protocol requests was made against a domain controller that does not support services for users.
+	CROSSREALM_DELEGATION_FAILURE = 0x80090357  #An attempt was made by this server to make a Kerberos-constrained delegation request for a target outside the server's realm. This is not supported and indicates a misconfiguration on this server's allowed-to-delegate-to list. Contact your administrator.
+	REVOCATION_OFFLINE_KDC = 0x80090358  #The revocation status of the domain controller certificate used for smart card authentication could not be determined. The system event log contains additional information. Contact your system administrator.
+	ISSUING_CA_UNTRUSTED_KDC = 0x80090359  #An untrusted CA was detected while processing the domain controller certificate used for authentication. The system event log contains additional information. Contact your system administrator.
+	KDC_CERT_EXPIRED = 0x8009035A  #The domain controller certificate used for smart card logon has expired. Contact your system administrator with the contents of your system event log.
+	KDC_CERT_REVOKED = 0x8009035B  #The domain controller certificate used for smart card logon has been revoked. Contact your system administrator with the contents of your system event log.
+	INVALID_PARAMETER = 0x8009035D  #One or more of the parameters passed to the function were invalid.
+	DELEGATION_POLICY = 0x8009035E  #The client policy does not allow credential delegation to the target server.
+	POLICY_NLTM_ONLY = 0x8009035F  #The client policy does not allow credential delegation to the target server with NLTM only authentication.
 	RENEGOTIATE = 590625
 	COMPLETE_AND_CONTINUE = 590612
 	COMPLETE_NEEDED = 590611
-	INCOMPLETE_CREDENTIALS = 590624
+	#INCOMPLETE_CREDENTIALS = 590624
 
 class SECPKG_CRED(enum.IntFlag):
 	AUTOLOGON_RESTRICTED = 0x00000010 	#The security does not use default logon credentials or credentials from Credential Manager.
@@ -312,7 +369,7 @@ def InitializeSecurityContext(creds, target, ctx = None, flags = ISC_REQ.INTEGRI
 	
 	return res, ctx, data, ISC_REQ(outputflags.value), expiry
 	
-def DecryptMessage(ctx, data, message_no = 0):
+def DecryptMessage(ctx, token, data, message_no = 0):
 	def errc(result, func, arguments):
 		if SEC_E(result) == SEC_E.OK:
 			return SEC_E(result)
@@ -324,7 +381,10 @@ def DecryptMessage(ctx, data, message_no = 0):
 	_DecryptMessage.errcheck  = errc
 	
 	secbuffers = []
-	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
+	secbuffers.append(SecBuffer(token=token, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN))
+	secbuffers.append(SecBuffer(token=data[:-1], buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
+	secbuffers.append(SecBuffer(token=data[-1:],buffer_type = SECBUFFER_TYPE.SECBUFFER_PADDING))
+	
 	
 	data = SecBufferDesc(secbuffers)
 	
@@ -362,7 +422,7 @@ def GetSequenceNumberFromEncryptdataKerberos(ctx):
 	return tok.SND_SEQ
 	
 def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
-	raise NotImplementedError()
+	#raise NotImplementedError()
 	def errc(result, func, arguments):
 		if SEC_E(result) == SEC_E.OK:
 			return SEC_E(result)
@@ -377,7 +437,7 @@ def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	#secbuffers.append(SecBuffer(token=b'\x00'*1024, buffer_type = SECBUFFER_TYPE.SECBUFFER_STREAM_HEADER))
 	secbuffers.append(SecBuffer(token=b'\x00'*1024, buffer_type = SECBUFFER_TYPE.SECBUFFER_TOKEN))
 	secbuffers.append(SecBuffer(token=data, buffer_type = SECBUFFER_TYPE.SECBUFFER_DATA))
-	#secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_PADDING))
+	secbuffers.append(SecBuffer(token =b'\x00'*1024,buffer_type = SECBUFFER_TYPE.SECBUFFER_PADDING))
 	#secbuffers.append(SecBuffer(token = b'',buffer_type = SECBUFFER_TYPE.SECBUFFER_EMPTY))
 	
 	data = SecBufferDesc(secbuffers)
@@ -408,4 +468,26 @@ def QueryContextAttributes(ctx, attr, sec_struct):
 	res = _QueryContextAttributes(byref(ctx), attr.value, byref(sec_struct))
 	
 	return
+
+
+# https://docs.microsoft.com/en-us/windows/win32/api/sspi/nf-sspi-setcontextattributesw
+def SetContextAttributes(ctx, attr, data):
+	#attr = SECPKG_ATTR enum
+	def errc(result, func, arguments):
+		if SEC_E(result) == SEC_E.OK:
+			return SEC_E(result)
+		raise Exception('%s failed with error code %s (%s)' % ('SetContextAttributes', result, SEC_E(result)))
+		
+	_SetContextAttributes = windll.Secur32.SetContextAttributesW
+	_SetContextAttributes.argtypes = [PCtxtHandle, ULONG, PVOID, ULONG]
+	_SetContextAttributes.restype  = DWORD
+	_SetContextAttributes.errcheck  = errc
+
+	print('set data: %s' % data)
+	print('set attr: %s' % attr)
+	data_len = ULONG(len(data))
+	data_buff = ctypes.create_string_buffer(data, len(data))
 	
+	res = _SetContextAttributes(byref(ctx), attr.value, data_buff, data_len)
+	
+	return

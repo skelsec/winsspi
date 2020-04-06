@@ -312,8 +312,11 @@ class NTLMMSLDAPSSPI:
 		sec_struct = SecPkgContext_SessionKey()
 		QueryContextAttributes(self.context, SECPKG_ATTR.SESSION_KEY, sec_struct)
 		return sec_struct.Buffer
+
+	#def set_chbind(self, cb_data):
+	#	SetContextAttributes(self.context, SECPKG_ATTR.ENDPOINT_BINDINGS, cb_data)
 		
-	def negotiate(self, is_rpc = False, ctx_flags = ISC_REQ.CONNECTION ):
+	def negotiate(self, is_rpc = False, ctx_flags = ISC_REQ.CONNECTION , cb_data = None):
 		self.ctx_flags = ctx_flags
 		self.cred_struct = AcquireCredentialsHandle(self.client_name, 'NTLM', self.target_name, self.credusage_flags)
 		res, self.context, data, self.ctx_outflags, expiry = InitializeSecurityContext(
