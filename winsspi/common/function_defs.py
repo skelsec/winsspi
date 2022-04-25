@@ -395,7 +395,7 @@ def DecryptMessage(ctx, token, data, message_no = 0):
 	
 	return data.Buffers
 
-def GetSequenceNumberFromEncryptdataKerberos(ctx):
+def GetSequenceNumberFromEncryptdataKerberos(ctx, unwrap=True):
 	def errc(result, func, arguments):
 		if SEC_E(result) == SEC_E.OK:
 			return SEC_E(result)
@@ -418,8 +418,10 @@ def GetSequenceNumberFromEncryptdataKerberos(ctx):
 	message_no = ULONG(0)
 
 	res = _EncryptMessage(ctx, flags, byref(data), message_no)
-	tok = GSSWrapToken.from_bytes(data.Buffers[0][1])
-	return tok.SND_SEQ
+	if unwrap is True:
+		tok = GSSWrapToken.from_bytes(data.Buffers[0][1])
+		return tok.SND_SEQ
+	return data.Buffers[0][1]
 	
 def EncryptMessage(ctx, data, message_no = 0, fQOP = None):
 	#raise NotImplementedError()
